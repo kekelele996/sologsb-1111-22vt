@@ -3,18 +3,21 @@ import type { DrillHole } from '../types/drill-hole';
 import type { DrillRun } from '../types/drill-run';
 import type { CoreBox } from '../types/core-box';
 import type { LithoLog } from '../types/litho-log';
+import type { SampleChain } from '../types/sample-chain';
+import { ensureSamplesFromLithos } from './sample-chain';
 
 /** IndexedDB 库名（浏览器本地存储，无后端） */
 export const DB_NAME = 'gbdrillcore-db';
 
 /** 当前 schema 版本，与 db.version(n) 对应 */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 class DrillCoreDB extends Dexie {
   holes!: Table<DrillHole, string>;
   runs!: Table<DrillRun, string>;
   boxes!: Table<CoreBox, string>;
   lithos!: Table<LithoLog, string>;
+  samples!: Table<SampleChain, string>;
   meta!: Table<{ key: string; value: string }, string>;
 
   constructor() {
@@ -48,6 +51,24 @@ class DrillCoreDB extends Dexie {
               row.rqd = 0;
             }
           });
+      });
+
+    // v3：新增样品流转台账 samples，sampleNo 唯一索引；按既有岩性编录回填待采样记录。
+    this.version(3)
+      .stores({
+        holes: 'id, holeNo, rigNo, shift, startDate',
+        runs: 'id, runNo, holeId, fromDepth, toDepth, shift',
+        boxes: 'id, boxNo, holeId, shelfPos, boxedAt',
+        lithos: 'id, holeId, fromDepth, toDepth, [holeId+fromDepth], lithology',
+        samples: 'id, sampleNo, holeId, status, lithoId',
+        meta: 'key',
+      })
+      .upgrade(async (tx) => {
+        const lithos = await tx.table<LithoLog, string>('lithos').toArray();
+        await ensureSamplesFromLithos(
+          { lithos: tx.table('lithos'), samples: tx.table('samples') },
+          lithos,
+        );
       });
   }
 }

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Alert, App as AntApp, Button, Card, Col, Form, Input, InputNumber, Modal, Popconfirm, Row, Select, Space, Table, Tag, Typography } from 'antd';
 import type { TableColumnsType } from 'antd';
 import DepthRangeInput from '../components/common/DepthRangeInput';
@@ -7,6 +7,7 @@ import EmptyPanel from '../components/common/EmptyPanel';
 import { useHoleStore } from '../stores/holeStore';
 import { useRunStore } from '../stores/runStore';
 import { useLithoStore } from '../stores/lithoStore';
+import { useSampleStore } from '../stores/sampleStore';
 import {
   ALTERATIONS,
   LITHOLOGIES,
@@ -16,6 +17,7 @@ import {
   type Lithology,
   type Mineralization,
 } from '../types/litho-log';
+import { SAMPLE_STATUS_COLOR, SAMPLE_STATUS_LABEL } from '../types/sample-chain';
 import { gapsWithin, validateRange } from '../utils/recovery';
 
 const { Title, Paragraph, Text } = Typography;
@@ -46,11 +48,16 @@ export default function LithoEditor() {
   const updateLitho = useLithoStore((s) => s.updateLitho);
   const removeLitho = useLithoStore((s) => s.removeLitho);
   const checkConflicts = useLithoStore((s) => s.checkConflicts);
+  const checkSampleDuplicate = useLithoStore((s) => s.checkSampleDuplicate);
+  const samples = useSampleStore((s) => s.samples);
+  const sampleByNo = useMemo(() => new Map(samples.map((sample) => [sample.sampleNo, sample])), [samples]);
 
   const [form] = Form.useForm<LithoFormValues>();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<LithoLog | null>(null);
   const [conflictIds, setConflictIds] = useState<string[]>([]);
+  /** 样品号跨孔重复（实时查重，命中时保存会被拦下） */
+  const [duplicateHoleNo, setDuplicateHoleNo] = useState('');
   /** 深度区间以本地 state 为唯一数据源（Form.useWatch 在弹窗挂载前可能读不到值） */
   const [range, setRange] = useState<{ from: number; to: number }>({ from: 0, to: 0 });
 
@@ -66,6 +73,27 @@ export default function LithoEditor() {
   const liveFrom = range.from;
   const liveTo = range.to;
   const liveHoleId = Form.useWatch('holeId', form) ?? activeHoleId;
+  const liveSampleNo = Form.useWatch('sampleNo', form) as string | undefined;
+
+  // 样品号实时跨孔查重：同一编号在别的钻孔出现即提示，保存会被拦下
+  useEffect(() => {
+    if (!open) {
+      setDuplicateHoleNo('');
+      return;
+    }
+    const no = (liveSampleNo ?? '').trim();
+    if (!no) {
+      setDuplicateHoleNo('');
+      return;
+    }
+    let alive = true;
+    checkSampleDuplicate(no, liveHoleId, editing?.id).then((hole) => {
+      if (alive) setDuplicateHoleNo(hole?.holeNo ?? '');
+    });
+    return () => {
+      alive = false;
+    };
+  }, [open, liveSampleNo, liveHoleId, editing?.id, checkSampleDuplicate]);
   const liveConflicts = useMemo(() => {
     if (!liveTo || liveTo <= liveFrom) return [];
     return checkConflicts({ holeId: liveHoleId, fromDepth: liveFrom, toDepth: liveTo }, editing?.id);
@@ -127,6 +155,10 @@ export default function LithoEditor() {
       message.error(rangeError);
       return;
     }
+    if ((values.sampleNo ?? '').trim() && duplicateHoleNo) {
+      message.error(`样品号 ${values.sampleNo.trim()} 已在钻孔 ${duplicateHoleNo} 登记，不能跨钻孔使用`);
+      return;
+    }
     const payload = {
       holeId: values.holeId,
       fromDepth: range.from,
@@ -149,6 +181,13 @@ export default function LithoEditor() {
       message.error(`深度区间与已编录区间重叠：${detail}`);
       return;
     }
+    if (result.duplicateSample) {
+      const otherHole = holes.find((h) => h.id === result.duplicateSample?.otherHoleId);
+      message.error(
+        `样品号 ${result.duplicateSample.sampleNo} 已在钻孔 ${otherHole?.holeNo ?? '其他钻孔'} 登记，同一样品号不能跨钻孔使用，编录未保存`,
+      );
+      return;
+    }
     setConflictIds([]);
     message.success(
       editing
@@ -166,7 +205,16 @@ export default function LithoEditor() {
     { title: '蚀变', dataIndex: 'alteration', width: 110 },
     { title: '矿化', dataIndex: 'mineralization', width: 100 },
     { title: 'RQD(%)', dataIndex: 'rqd', width: 90, align: 'right', render: (v: number) => <Text type={v < 50 ? 'danger' : undefined}>{v}</Text> },
-    { title: '样品号', dataIndex: 'sampleNo', width: 130, render: (v: string) => v || '-' },
+    { title: '样品号', dataIndex: 'sampleNo', width: 150, render: (v: string) => {
+      if (!v) return '-';
+      const chain = sampleByNo.get(v);
+      return (
+        <Space size={4}>
+          <Text strong>{v}</Text>
+          {chain ? <Tag color={SAMPLE_STATUS_COLOR[chain.status]}>{SAMPLE_STATUS_LABEL[chain.status]}</Tag> : null}
+        </Space>
+      );
+    } },
     { title: '编录人', dataIndex: 'logger', width: 90 },
     { title: '备注', dataIndex: 'remark', ellipsis: true, render: (v?: string) => v ?? '-' },
     {
@@ -229,7 +277,7 @@ export default function LithoEditor() {
                 columns={columns}
                 dataSource={holeLogs}
                 pagination={{ pageSize: 8 }}
-                scroll={{ x: 1250 }}
+                scroll={{ x: 1300 }}
                 rowClassName={(row) => (conflictIds.includes(row.id) ? 'conflict-row' : '')}
               />
             </Card>
@@ -281,8 +329,13 @@ export default function LithoEditor() {
             <Form.Item name="rqd" label="RQD(%)" rules={[{ required: true, message: '请输入 RQD' }]}>
               <InputNumber min={0} max={100} style={{ width: 140 }} placeholder="RQD" />
             </Form.Item>
-            <Form.Item name="sampleNo" label="样品号">
-              <Input style={{ width: 180 }} maxLength={24} placeholder="如：YP-2406-01" />
+            <Form.Item
+              name="sampleNo"
+              label="样品号"
+              validateStatus={duplicateHoleNo ? 'error' : undefined}
+              help={duplicateHoleNo ? `该样品号已在钻孔 ${duplicateHoleNo} 登记，保存将被拦下；同孔多段可共用` : '保存后自动建立待采样记录'}
+            >
+              <Input style={{ width: 220 }} maxLength={24} placeholder="如：YP-2406-01" />
             </Form.Item>
             <Form.Item name="logger" label="编录人" rules={[{ required: true, message: '请输入编录人' }]}>
               <Input style={{ width: 140 }} maxLength={16} placeholder="编录人" />

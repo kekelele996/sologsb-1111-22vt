@@ -1,4 +1,7 @@
 import { db, SCHEMA_VERSION } from './db';
+import type { SampleChain } from '../types/sample-chain';
+import type { LithoLog } from '../types/litho-log';
+import { ensureSamplesFromLithos } from './sample-chain';
 
 export interface BackupPayload {
   app: string;
@@ -8,15 +11,17 @@ export interface BackupPayload {
   runs: unknown[];
   boxes: unknown[];
   lithos: unknown[];
+  samples: SampleChain[];
 }
 
 /** 汇总全部本地表为 JSON 备份（schema 迁移前先导出） */
 export async function buildBackup(): Promise<BackupPayload> {
-  const [holes, runs, boxes, lithos] = await Promise.all([
+  const [holes, runs, boxes, lithos, samples] = await Promise.all([
     db.holes.toArray(),
     db.runs.toArray(),
     db.boxes.toArray(),
     db.lithos.toArray(),
+    db.samples.toArray(),
   ]);
   return {
     app: 'gbdrillcore',
@@ -26,6 +31,7 @@ export async function buildBackup(): Promise<BackupPayload> {
     runs,
     boxes,
     lithos,
+    samples,
   };
 }
 
@@ -55,11 +61,11 @@ export function downloadCsv<T extends Record<string, unknown>>(
   const body = rows
     .map((row) => columns.map((c) => `"${String(row[c.key] ?? '').replace(/"/g, '""')}"`).join(','))
     .join('\n');
-  downloadText(filename, `\ufeff${header}\n${body}`, 'text/csv');
+  downloadText(filename, `﻿${header}\n${body}`, 'text/csv');
 }
 
-/** 恢复 JSON 备份 */
-export async function importBackup(text: string): Promise<{ holes: number; runs: number; boxes: number; lithos: number }> {
+/** 恢复 JSON 备份；旧版备份（无 samples）按岩性样品号补建待采样记录 */
+export async function importBackup(text: string): Promise<{ holes: number; runs: number; boxes: number; lithos: number; samples: number }> {
   const payload = JSON.parse(text) as Partial<BackupPayload>;
   if (!payload || payload.app !== 'gbdrillcore') {
     throw new Error('备份文件格式不匹配（缺少 app=gbdrillcore 标记）');
@@ -69,13 +75,21 @@ export async function importBackup(text: string): Promise<{ holes: number; runs:
     runs: payload.runs?.length ?? 0,
     boxes: payload.boxes?.length ?? 0,
     lithos: payload.lithos?.length ?? 0,
+    samples: payload.samples?.length ?? 0,
   };
-  await db.transaction('rw', db.holes, db.runs, db.boxes, db.lithos, async () => {
-    await Promise.all([db.holes.clear(), db.runs.clear(), db.boxes.clear(), db.lithos.clear()]);
+  await db.transaction('rw', [db.holes, db.runs, db.boxes, db.lithos, db.samples], async () => {
+    await Promise.all([db.holes.clear(), db.runs.clear(), db.boxes.clear(), db.lithos.clear(), db.samples.clear()]);
     if (payload.holes?.length) await db.holes.bulkPut(payload.holes as never[]);
     if (payload.runs?.length) await db.runs.bulkPut(payload.runs as never[]);
     if (payload.boxes?.length) await db.boxes.bulkPut(payload.boxes as never[]);
     if (payload.lithos?.length) await db.lithos.bulkPut(payload.lithos as never[]);
+    if (payload.samples?.length) {
+      await db.samples.bulkPut(payload.samples as never[]);
+    } else if (payload.lithos?.length) {
+      // 旧版备份：样品号自动补建为待采样记录
+      await ensureSamplesFromLithos({ lithos: db.lithos, samples: db.samples }, payload.lithos as LithoLog[]);
+      counts.samples = await db.samples.count();
+    }
   });
   return counts;
 }
