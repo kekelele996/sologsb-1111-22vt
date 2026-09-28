@@ -2,7 +2,9 @@ import { create } from 'zustand';
 import { db } from '../utils/db';
 import { uid } from '../utils/id';
 import type { Alteration, LithoLog, Lithology, Mineralization, RangeConflict } from '../types/litho-log';
+import type { SampleRecord } from '../types/sample-record';
 import { findConflicts } from '../utils/recovery';
+import { deleteLithoWithSample, replaceSamplesInState, saveLithoWithSample } from './sampleStore';
 
 export interface LithoInput {
   holeId: string;
@@ -24,9 +26,9 @@ interface LithoState {
   hydrate: () => Promise<void>;
   /** 编录区间冲突校验：返回与已编录区间重叠的冲突项（空数组表示无冲突） */
   checkConflicts: (input: Pick<LithoInput, 'holeId' | 'fromDepth' | 'toDepth'>, ignoreId?: string) => RangeConflict[];
-  addLitho: (input: LithoInput) => Promise<{ log?: LithoLog; conflicts: RangeConflict[] }>;
-  updateLitho: (id: string, patch: Partial<LithoInput>) => Promise<{ log?: LithoLog; conflicts: RangeConflict[] }>;
-  removeLitho: (id: string) => Promise<void>;
+  addLitho: (input: LithoInput) => Promise<{ log?: LithoLog; conflicts: RangeConflict[]; duplicateSample?: SampleRecord; protectedSample?: SampleRecord }>;
+  updateLitho: (id: string, patch: Partial<LithoInput>) => Promise<{ log?: LithoLog; conflicts: RangeConflict[]; duplicateSample?: SampleRecord; protectedSample?: SampleRecord }>;
+  removeLitho: (id: string) => Promise<{ protectedSample?: SampleRecord }>;
 }
 
 /** 岩性区间与冲突校验 */
@@ -75,7 +77,11 @@ export const useLithoStore = create<LithoState>()((set, get) => ({
       logger: input.logger.trim(),
       remark: input.remark?.trim() || undefined,
     };
-    await db.lithos.put(log);
+    const result = await saveLithoWithSample(log);
+    if (result.duplicateSample) {
+      return { conflicts: [], duplicateSample: result.duplicateSample };
+    }
+    replaceSamplesInState(result.changedSamples, result.removedSampleId);
     set({ lithos: [...get().lithos, log] });
     return { log, conflicts: [] };
   },
@@ -89,13 +95,24 @@ export const useLithoStore = create<LithoState>()((set, get) => ({
       return { conflicts };
     }
     const next: LithoLog = { ...merged };
-    await db.lithos.put(next);
+    const result = await saveLithoWithSample(next, current);
+    if (result.duplicateSample) {
+      return { conflicts: [], duplicateSample: result.duplicateSample };
+    }
+    replaceSamplesInState(result.changedSamples, result.removedSampleId);
     set({ lithos: get().lithos.map((l) => (l.id === id ? next : l)) });
     return { log: next, conflicts: [] };
   },
 
   removeLitho: async (id) => {
-    await db.lithos.delete(id);
+    const current = get().lithos.find((l) => l.id === id);
+    if (!current) return {};
+    const result = await deleteLithoWithSample(current);
+    if (result.protectedSample) {
+      return { protectedSample: result.protectedSample };
+    }
+    replaceSamplesInState(result.changedSamples, result.removedSampleId);
     set({ lithos: get().lithos.filter((l) => l.id !== id) });
+    return {};
   },
 }));

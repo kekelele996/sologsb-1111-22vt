@@ -7,6 +7,7 @@ import EmptyPanel from '../components/common/EmptyPanel';
 import { useHoleStore } from '../stores/holeStore';
 import { useRunStore } from '../stores/runStore';
 import { useLithoStore } from '../stores/lithoStore';
+import { useSampleStore } from '../stores/sampleStore';
 import {
   ALTERATIONS,
   LITHOLOGIES,
@@ -46,6 +47,7 @@ export default function LithoEditor() {
   const updateLitho = useLithoStore((s) => s.updateLitho);
   const removeLitho = useLithoStore((s) => s.removeLitho);
   const checkConflicts = useLithoStore((s) => s.checkConflicts);
+  const samples = useSampleStore((s) => s.samples);
 
   const [form] = Form.useForm<LithoFormValues>();
   const [open, setOpen] = useState(false);
@@ -66,6 +68,11 @@ export default function LithoEditor() {
   const liveFrom = range.from;
   const liveTo = range.to;
   const liveHoleId = Form.useWatch('holeId', form) ?? activeHoleId;
+  const liveSampleNo = (Form.useWatch('sampleNo', form) as string | undefined)?.trim() ?? '';
+  const duplicateSample = useMemo(() => {
+    if (!liveSampleNo) return undefined;
+    return samples.find((sample) => sample.sampleNo === liveSampleNo && sample.holeId !== liveHoleId);
+  }, [samples, liveSampleNo, liveHoleId]);
   const liveConflicts = useMemo(() => {
     if (!liveTo || liveTo <= liveFrom) return [];
     return checkConflicts({ holeId: liveHoleId, fromDepth: liveFrom, toDepth: liveTo }, editing?.id);
@@ -141,6 +148,11 @@ export default function LithoEditor() {
       remark: values.remark,
     };
     const result = editing ? await updateLitho(editing.id, payload) : await addLitho(payload);
+    if (result.duplicateSample) {
+      const otherHole = holes.find((hole) => hole.id === result.duplicateSample?.holeId)?.holeNo ?? '其他钻孔';
+      message.error(`样品号 ${result.duplicateSample.sampleNo} 已属于 ${otherHole}，不能在本孔重复使用，编录未保存`);
+      return;
+    }
     if (result.conflicts.length) {
       setConflictIds(result.conflicts.map((c) => c.other.id));
       const detail = result.conflicts
@@ -156,6 +168,15 @@ export default function LithoEditor() {
         : `已编录 ${payload.lithology} ${payload.fromDepth}~${payload.toDepth}m`,
     );
     setOpen(false);
+  };
+
+  const handleDelete = async (record: LithoLog) => {
+    const result = await removeLitho(record.id);
+    if (result.protectedSample) {
+      message.error(`样品 ${result.protectedSample.sampleNo} 已${result.protectedSample.status === 'submitted' ? '送检' : '采样'}，不能随编录删除`);
+      return;
+    }
+    message.success('已删除');
   };
 
   const columns: TableColumnsType<LithoLog> = [
@@ -178,7 +199,7 @@ export default function LithoEditor() {
           <Button size="small" type="link" onClick={() => openEdit(record)}>
             编辑
           </Button>
-          <Popconfirm title={`确认删除 ${record.fromDepth}~${record.toDepth}m 编录？`} onConfirm={() => removeLitho(record.id).then(() => message.success('已删除'))}>
+          <Popconfirm title={`确认删除 ${record.fromDepth}~${record.toDepth}m 编录？`} onConfirm={() => handleDelete(record)}>
             <Button size="small" type="link" danger>
               删除
             </Button>
@@ -194,7 +215,7 @@ export default function LithoEditor() {
         岩性描述编录
       </Title>
       <Paragraph type="secondary">
-        按深度区间编录岩性、蚀变、矿化与 RQD，区间不允许与已编录区间重叠（重叠即报冲突并高亮）；右侧柱状图叠加样品位与采取率异常段。
+        按深度区间编录岩性、蚀变、矿化与 RQD，区间不允许与已编录区间重叠；保存样品号会自动建立待采样台账，且样品号不得跨钻孔重复；右侧柱状图叠加样品位与采取率异常段。
       </Paragraph>
 
       <Space style={{ marginBottom: 12 }} wrap>
@@ -289,7 +310,14 @@ export default function LithoEditor() {
             </Form.Item>
           </Space>
 
-          {liveConflicts.length > 0 ? (
+          {duplicateSample ? (
+            <Alert
+              type="error"
+              showIcon
+              message={`样品号 ${duplicateSample.sampleNo} 已属于其他钻孔，保存将被拦截`}
+              description={`该编号已登记在 ${holes.find((hole) => hole.id === duplicateSample.holeId)?.holeNo ?? '其他钻孔'} 的 ${duplicateSample.fromDepth}~${duplicateSample.toDepth}m 区间。请核对样品号，不允许跨钻孔重复。`}
+            />
+          ) : liveConflicts.length > 0 ? (
             <Alert
               type="error"
               showIcon

@@ -3,6 +3,7 @@ import type { DrillHole } from '../types/drill-hole';
 import type { DrillRun } from '../types/drill-run';
 import type { CoreBox } from '../types/core-box';
 import type { LithoLog } from '../types/litho-log';
+import type { SampleRecord } from '../types/sample-record';
 import { footageOf, recoveryOf } from './recovery';
 
 const DAY = 86_400_000;
@@ -167,24 +168,202 @@ export const SEED_LITHOS: LithoLog[] = [
   { id: 'litho-018', holeId: 'hole-005', fromDepth: 11, toDepth: 45, lithology: '花岗闪长岩', color: '灰白色', alteration: '硅化', mineralization: '无', rqd: 87, sampleNo: 'YP-2405-01', logger: '吴倩' },
 ];
 
+export const SEED_SAMPLES: SampleRecord[] = [
+  {
+    id: 'sample-seed-2402-01',
+    sampleNo: 'YP-2402-01',
+    holeId: 'hole-002',
+    lithoLogId: 'litho-002',
+    fromDepth: 8,
+    toDepth: 62,
+    status: 'submitted',
+    sampledBy: '高振华',
+    sampledAt: daysAgo(36),
+    samplingVoucherNo: 'QZ-2402-01',
+    sentBy: '陈立',
+    sentAt: daysAgo(34),
+    sendingVoucherNo: 'SJ-2402-01',
+    sampleWeight: 2.35,
+    sendingUnit: '矿区中心实验室',
+    createdAt: daysAgo(38),
+    updatedAt: daysAgo(34),
+  },
+  {
+    id: 'sample-seed-2402-02',
+    sampleNo: 'YP-2402-02',
+    holeId: 'hole-002',
+    lithoLogId: 'litho-003',
+    fromDepth: 62,
+    toDepth: 96,
+    status: 'submitted',
+    sampledBy: '高振华',
+    sampledAt: daysAgo(32),
+    samplingVoucherNo: 'QZ-2402-02',
+    sentBy: '陈立',
+    sentAt: daysAgo(30),
+    sendingVoucherNo: 'SJ-2402-02',
+    sampleWeight: 1.86,
+    sendingUnit: '华岩第三方检测中心',
+    createdAt: daysAgo(34),
+    updatedAt: daysAgo(30),
+  },
+  {
+    id: 'sample-seed-2402-03',
+    sampleNo: 'YP-2402-03',
+    holeId: 'hole-002',
+    lithoLogId: 'litho-004',
+    fromDepth: 96,
+    toDepth: 132,
+    status: 'sampled',
+    sampledBy: '周明',
+    sampledAt: daysAgo(24),
+    samplingVoucherNo: 'QZ-2402-03',
+    createdAt: daysAgo(27),
+    updatedAt: daysAgo(24),
+  },
+  {
+    id: 'sample-seed-2402-04',
+    sampleNo: 'YP-2402-04',
+    holeId: 'hole-002',
+    lithoLogId: 'litho-005',
+    fromDepth: 132,
+    toDepth: 168,
+    status: 'pending',
+    createdAt: daysAgo(20),
+    updatedAt: daysAgo(20),
+  },
+  {
+    id: 'sample-seed-2403-01',
+    sampleNo: 'YP-2403-01',
+    holeId: 'hole-003',
+    lithoLogId: 'litho-008',
+    fromDepth: 12,
+    toDepth: 74,
+    status: 'submitted',
+    sampledBy: '周明',
+    sampledAt: daysAgo(48),
+    samplingVoucherNo: 'QZ-2403-01',
+    sentBy: '吴倩',
+    sentAt: daysAgo(46),
+    sendingVoucherNo: 'SJ-2403-01',
+    sampleWeight: 3.12,
+    sendingUnit: '矿区中心实验室',
+    createdAt: daysAgo(50),
+    updatedAt: daysAgo(46),
+  },
+  {
+    id: 'sample-seed-2403-02',
+    sampleNo: 'YP-2403-02',
+    holeId: 'hole-003',
+    lithoLogId: 'litho-009',
+    fromDepth: 74,
+    toDepth: 118,
+    status: 'sampled',
+    sampledBy: '赵晓峰',
+    sampledAt: daysAgo(40),
+    samplingVoucherNo: 'QZ-2403-02',
+    createdAt: daysAgo(42),
+    updatedAt: daysAgo(40),
+  },
+  {
+    id: 'sample-seed-2403-03',
+    sampleNo: 'YP-2403-03',
+    holeId: 'hole-003',
+    lithoLogId: 'litho-010',
+    fromDepth: 118,
+    toDepth: 205,
+    status: 'pending',
+    createdAt: daysAgo(32),
+    updatedAt: daysAgo(32),
+  },
+  {
+    id: 'sample-seed-2403-04',
+    sampleNo: 'YP-2403-04',
+    holeId: 'hole-003',
+    lithoLogId: 'litho-011',
+    fromDepth: 205,
+    toDepth: 320,
+    status: 'pending',
+    createdAt: daysAgo(18),
+    updatedAt: daysAgo(18),
+  },
+  {
+    id: 'sample-seed-2404-01',
+    sampleNo: 'YP-2404-01',
+    holeId: 'hole-004',
+    lithoLogId: 'litho-013',
+    fromDepth: 10,
+    toDepth: 180,
+    status: 'submitted',
+    sampledBy: '赵晓峰',
+    sampledAt: daysAgo(26),
+    samplingVoucherNo: 'QZ-2404-01',
+    sentBy: '赵晓峰',
+    sentAt: daysAgo(24),
+    sendingVoucherNo: 'SJ-2404-01',
+    sampleWeight: 5.48,
+    sendingUnit: '华岩第三方检测中心',
+    createdAt: daysAgo(28),
+    updatedAt: daysAgo(24),
+  },
+  {
+    id: 'sample-seed-2401-01',
+    sampleNo: 'YP-2401-01',
+    holeId: 'hole-001',
+    lithoLogId: 'litho-015',
+    fromDepth: 9,
+    toDepth: 86,
+    status: 'sampled',
+    sampledBy: '高振华',
+    sampledAt: daysAgo(14),
+    samplingVoucherNo: 'QZ-2401-01',
+    createdAt: daysAgo(17),
+    updatedAt: daysAgo(14),
+  },
+  {
+    id: 'sample-seed-2401-02',
+    sampleNo: 'YP-2401-02',
+    holeId: 'hole-001',
+    lithoLogId: 'litho-016',
+    fromDepth: 86,
+    toDepth: 155,
+    status: 'pending',
+    createdAt: daysAgo(8),
+    updatedAt: daysAgo(8),
+  },
+  {
+    id: 'sample-seed-2405-01',
+    sampleNo: 'YP-2405-01',
+    holeId: 'hole-005',
+    lithoLogId: 'litho-018',
+    fromDepth: 11,
+    toDepth: 45,
+    status: 'pending',
+    createdAt: daysAgo(5),
+    updatedAt: daysAgo(5),
+  },
+];
+
 /** 首次打开（表内无数据）时写入示例数据；已有数据则不动 */
 export async function seedIfEmpty(): Promise<void> {
   const flag = await db.meta.get('seeded');
   if (flag) {
     return;
   }
-  const [holeCount, runCount, boxCount, lithoCount] = await Promise.all([
+  const [holeCount, runCount, boxCount, lithoCount, sampleCount] = await Promise.all([
     db.holes.count(),
     db.runs.count(),
     db.boxes.count(),
     db.lithos.count(),
+    db.samples.count(),
   ]);
 
-  await db.transaction('rw', db.holes, db.runs, db.boxes, db.lithos, db.meta, async () => {
+  await db.transaction('rw', [db.holes, db.runs, db.boxes, db.lithos, db.samples, db.meta], async () => {
     if (holeCount === 0) await db.holes.bulkPut(SEED_HOLES);
     if (runCount === 0) await db.runs.bulkPut(SEED_RUNS);
     if (boxCount === 0) await db.boxes.bulkPut(SEED_BOXES);
     if (lithoCount === 0) await db.lithos.bulkPut(SEED_LITHOS);
+    if (sampleCount === 0) await db.samples.bulkPut(SEED_SAMPLES);
     await db.meta.put({ key: 'seeded', value: new Date().toISOString() });
   });
 }
